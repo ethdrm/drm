@@ -1,4 +1,4 @@
-pragma solidity ^0.4.0;
+pragma solidity ^0.4.5;
 
 library ArrayUtils {
   function map(uint[] memory before, function (uint) returns (uint) f)
