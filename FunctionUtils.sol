@@ -5,7 +5,15 @@ library FunctionUtils {
     return x + y;
   }
 
-  function mult(uint x) internal returns (uint) {
-    return price * x;
+  function mult(uint x, uint y) internal returns (uint) {
+    return y * x;
+  }
+
+  function div(uint x, uint y) internal returns(uint) {
+    return x / y;
+  }
+
+  function diff(uint x, uint y) internal returns(uint) {
+    return x - y;
   }
 }
