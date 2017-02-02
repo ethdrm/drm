@@ -12,14 +12,16 @@ contract Drm {
 
   address public owner;
   uint public price;
+  uint transferFee;
 
   event LicenceBought(address customer, uint amount);
-  event LicenceRevoked(address customer, uint amount, string reason);
+  event LicenceTransfered(address from, address to, uint amount);
   event LicenceRevoked(address customer, uint amount, string reason);
 
   event CustomerBanned(address customer, string reason);
 
   event PriceChanged(uint oldPrice, uint newPrice);
+  event TransferFeeChanged(uint oldPrice, uint newPrice);
 
   event DepositeReceived(address sender, uint amount);
 
@@ -38,9 +40,10 @@ contract Drm {
     _;
   }
 
-  function Drm(uint startPrice) {
+  function Drm(uint startPrice, uint startTransferFee) {
     owner = msg.sender;
     price = startPrice;
+    transferFee = startTransferFee;
   }
 
   function() payable {
@@ -62,6 +65,14 @@ contract Drm {
       if (blacklist[customers[i]]) throw;
       licences[customers[i]] += amount[i];
     }
+  }
+
+  function transferLicence(address from, address to) costs(transferFee) {
+    if (licences[from] <= 0) throw;
+    licences[from]--;
+    licences[to]++;
+
+    LicenceTransfered(from, to, 1);
   }
 
   function revokeLicence(
@@ -86,6 +97,13 @@ contract Drm {
     price = newPrice;
 
     PriceChanged(oldPrice, newPrice);
+  }
+
+  function changeTransferFee(uint newTransferFee) onlyOwner {
+    uint oldTransferFee = transferFee;
+    transferFee = newTransferFee;
+
+    TransferFeeChanged(oldTransferFee, newTransferFee);
   }
 
   function checkLicence(address customer) returns (bool) {
