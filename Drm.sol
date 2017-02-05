@@ -8,11 +8,6 @@ import "Discount.sol";
 contract Drm {
   using ArrayUtils for *;
 
-  struct LicenceRequest {
-    address customer;
-    uint amount;
-  }
-
   mapping(address => uint) public licences;
   mapping(address => bool) public blacklist;
   mapping(address => bool) public discounts;
@@ -21,12 +16,12 @@ contract Drm {
   uint public price;
   uint transferFee;
 
-  event LicenceBought(address customer, uint amount);
+  event LicenceBought(address[] to, uint[] amount);
   event LicenceTransfered(address from, address to, uint amount);
   event LicenceRevoked(address customer, uint amount, string reason);
 
-  event DiscountAdded(Discount discount);
-  event DiscountRemoved(Discount discount);
+  event DiscountAdded(address discount);
+  event DiscountRemoved(address discount);
 
   event CustomerBanned(address customer, string reason);
 
@@ -40,20 +35,8 @@ contract Drm {
     _;
   }
 
-  modifier costs(LicenceRequest[] requests, address[] discounts) {
-    uint total = 0;
-    for (uint i = 0; i < requests.length; i++) {
-      total += price * requests[i].amount;
-    }
-    for (i = 0; i < discounts.length; i++) {
-      total = applyDiscount(discounts[i], total, requests);
-    }
-    if (msg.value < total) throw;
-    _;
-  }
-
-  modifier notBlacklisted() {
-    if (blacklist[msg.sender]) throw;
+  modifier costs(uint cost) {
+    if (msg.value < cost) throw;
     _;
   }
 
@@ -67,39 +50,40 @@ contract Drm {
     DepositeReceived(msg.sender, msg.value);
   }
 
-  function buyLicence(
-    LicenceRequest request,
+  function buy(
+    address[] to,
+    uint[] amount,
     address[] discounts
-  )
-    payable
-    notBlacklisted(request.customer)
-    costs([request], discounts) {
-    licences[request.customer] += 1;
+  ) payable {
+    if (to.length != amount.length) throw;
 
-    LicenceBought(request);
-  }
-
-  function buyLicences(
-    LicenceRequest[] requests,
-    address[] discounts
-  )
-    payable
-    costs(requests, discounts) {
-    for (uint i = 0; i < requests.length; i++) {
-      if (blacklist[requests[i].customer]) throw;
-      licences[requests[i].customer] += requests[i].amount;
+    uint total = 0;
+    for (uint i = 0; i < to.length; i++) {
+      if (blacklist[to[i]]) throw;
+      total += price * amount[i];
     }
+
+    for (uint j = 0; j < discounts.length; j++) {
+      total = applyDiscount(discounts[i], total, to, amount);
+    }
+    if (msg.value < total) throw;
+
+    for (i = 0; i < to.length; i++) {
+      licences[to[i]] += amount[i];
+    }
+
+    LicenceBought(to, amount);
   }
 
-  function transferLicence(address from, address to) costs(transferFee) {
-    if (licences[from] <= 0) throw;
-    licences[from]--;
-    licences[to]++;
+  function transfer(address from, address to, uint amount) costs(transferFee) {
+    if (licences[from] < amount) throw;
+    licences[from] -= amount;
+    licences[to] += amount;
 
-    LicenceTransfered(from, to, 1);
+    LicenceTransfered(from, to, amount);
   }
 
-  function revokeLicence(
+  function revoke(
     address customer,
     uint amount,
     string reason
@@ -130,17 +114,17 @@ contract Drm {
     TransferFeeChanged(oldTransferFee, newTransferFee);
   }
 
-  function checkLicence(address customer) returns (bool) {
-    return licences[customer] > 0;
+  function checkLicence(address customer, uint amount) returns (bool) {
+    return licences[customer] >= amount;
   }
 
-  function registerDiscount(Discount discount) onlyOwner {
+  function registerDiscount(address discount) onlyOwner {
     discounts[discount] = true;
 
     DiscountAdded(discount);
   }
 
-  function unregisterDiscount(Discount discount) onlyOwner {
+  function unregisterDiscount(address discount) onlyOwner {
     discounts[discount] = false;
 
     DiscountRemoved(discount);
@@ -153,17 +137,14 @@ contract Drm {
   function applyDiscount(
     address discountAddress,
     uint total,
-    LicenceRequest[] requests
+    address[] to,
+    uint[] amount
   )
     internal returns (uint) {
     if (!discounts[discount]) {
       return total;
     }
     Discount discount = Discount(discountAddress);
-    return discount.apply(total, requests);
-  }
-
-  function priceMult(uint x) internal returns (uint) {
-    return price * x;
+    return discount.apply(total, to, amount);
   }
 }
