@@ -6,7 +6,7 @@ library FunctionUtils {
   }
 
   function mult(uint x, uint y) internal returns (uint) {
-    return y * x;
+    return x * y;
   }
 
   function div(uint x, uint y) internal returns(uint) {
