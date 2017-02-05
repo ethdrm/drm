@@ -2,13 +2,20 @@ pragma solidity ^0.4.5;
 
 import "ArrayUtils.sol";
 import "FunctionUtils.sol";
+import "Discount.sol";
 
 
 contract Drm {
   using ArrayUtils for *;
 
+  struct LicenceRequest {
+    address customer;
+    uint amount;
+  }
+
   mapping(address => uint) public licences;
   mapping(address => bool) public blacklist;
+  mapping(address => bool) public discounts;
 
   address public owner;
   uint public price;
@@ -17,6 +24,9 @@ contract Drm {
   event LicenceBought(address customer, uint amount);
   event LicenceTransfered(address from, address to, uint amount);
   event LicenceRevoked(address customer, uint amount, string reason);
+
+  event DiscountAdded(Discount discount);
+  event DiscountRemoved(Discount discount);
 
   event CustomerBanned(address customer, string reason);
 
@@ -30,8 +40,15 @@ contract Drm {
     _;
   }
 
-  modifier costs(uint amount) {
-    if (msg.value < amount) throw;
+  modifier costs(LicenceRequest[] requests, address[] discounts) {
+    uint total = 0;
+    for (uint i = 0; i < requests.length; i++) {
+      total += price * requests[i].amount;
+    }
+    for (i = 0; i < discounts.length; i++) {
+      total = applyDiscount(discounts[i], total, requests);
+    }
+    if (msg.value < total) throw;
     _;
   }
 
@@ -50,20 +67,27 @@ contract Drm {
     DepositeReceived(msg.sender, msg.value);
   }
 
-  function buyLicence() payable notBlacklisted costs(price) {
-    licences[msg.sender] += 1;
+  function buyLicence(
+    LicenceRequest request,
+    address[] discounts
+  )
+    payable
+    notBlacklisted(request.customer)
+    costs([request], discounts) {
+    licences[request.customer] += 1;
 
-    LicenceBought(msg.sender, 1);
+    LicenceBought(request);
   }
 
-  //TODO: check for overflow
-  function buyLicences(address[] customers, uint[] amount) payable {
-    if (customers.length != amount.length) throw;
-    if (msg.value < amount.map(priceMult).reduce(FunctionUtils.sum)) throw;
-
-    for (uint i = 0; i < customers.length; i++) {
-      if (blacklist[customers[i]]) throw;
-      licences[customers[i]] += amount[i];
+  function buyLicences(
+    LicenceRequest[] requests,
+    address[] discounts
+  )
+    payable
+    costs(requests, discounts) {
+    for (uint i = 0; i < requests.length; i++) {
+      if (blacklist[requests[i].customer]) throw;
+      licences[requests[i].customer] += requests[i].amount;
     }
   }
 
@@ -110,8 +134,33 @@ contract Drm {
     return licences[customer] > 0;
   }
 
+  function registerDiscount(Discount discount) onlyOwner {
+    discounts[discount] = true;
+
+    DiscountAdded(discount);
+  }
+
+  function unregisterDiscount(Discount discount) onlyOwner {
+    discounts[discount] = false;
+
+    DiscountRemoved(discount);
+  }
+
   function kill() onlyOwner {
     selfdestruct(owner);
+  }
+
+  function applyDiscount(
+    address discountAddress,
+    uint total,
+    LicenceRequest[] requests
+  )
+    internal returns (uint) {
+    if (!discounts[discount]) {
+      return total;
+    }
+    Discount discount = Discount(discountAddress);
+    return discount.apply(total, requests);
   }
 
   function priceMult(uint x) internal returns (uint) {
