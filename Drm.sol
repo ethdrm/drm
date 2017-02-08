@@ -1,18 +1,17 @@
 pragma solidity ^0.4.5;
 
-import "ArrayUtils.sol";
-import "FunctionUtils.sol";
 import "Discount.sol";
+import "DiscountRegistry.sol";
+import "LicenceContainer.sol";
+import "Mortal.sol";
 
 
-contract Drm {
-  using ArrayUtils for *;
+contract Drm is Mortal {
 
-  mapping(address => uint) public licences;
   mapping(address => bool) public blacklist;
-  mapping(address => bool) public discounts;
 
-  address public owner;
+  LicenceContainer licenceContainer;
+  DiscountRegistry discountRegistry;
   uint public price;
   uint transferFee;
 
@@ -41,7 +40,6 @@ contract Drm {
   }
 
   function Drm(uint startPrice, uint startTransferFee) {
-    owner = msg.sender;
     price = startPrice;
     transferFee = startTransferFee;
   }
@@ -58,40 +56,49 @@ contract Drm {
     if (to.length != amount.length) throw;
 
     uint total = 0;
-    for (uint i = 0; i < to.length; i++) {
+    for (uint i = 0; i < amount.length; i++) {
       if (blacklist[to[i]]) throw;
-      total += price * amount[i];
+      total += amount[i] * price;
     }
 
-    for (uint j = 0; j < discounts.length; j++) {
-      total = applyDiscount(discounts[i], total, to, amount);
+    for (i = 0; i < discounts.length; i++) {
+      var (discount, error) = discountRegistry.get(discounts[i]);
+      if (!error) {
+        total = discount.apply(total, to, amount);
+      }
     }
     if (msg.value < total) throw;
 
     for (i = 0; i < to.length; i++) {
-      licences[to[i]] += amount[i];
+      if (!licenceContainer.add(to[i], amount[i])) throw;
     }
 
     LicenceBought(to, amount);
   }
 
-  function transfer(address from, address to, uint amount) costs(transferFee) {
-    if (licences[from] < amount) throw;
-    licences[from] -= amount;
-    licences[to] += amount;
+  function transfer(
+    address from,
+    address to,
+    uint amount
+  ) costs(transferFee) {
+    if (blacklist[to]) throw;
+    if (!licenceContainer.transfer(from, to, amount)) throw;
 
     LicenceTransfered(from, to, amount);
   }
 
   function revoke(
-    address customer,
+    address from,
     uint amount,
     string reason
   ) onlyOwner {
-    if (licences[customer] < amount) throw;
-    licences[customer] -= amount;
+    if (!licenceContainer.revoke(from, amount)) throw;
 
-    LicenceRevoked(customer, amount, reason);
+    LicenceRevoked(from, amount, reason);
+  }
+
+  function check(address customer, uint amount) returns (bool) {
+    return licenceContainer.owns(customer, amount);
   }
 
   function ban(address customer, string reason) onlyOwner {
@@ -112,39 +119,5 @@ contract Drm {
     transferFee = newTransferFee;
 
     TransferFeeChanged(oldTransferFee, newTransferFee);
-  }
-
-  function checkLicence(address customer, uint amount) returns (bool) {
-    return licences[customer] >= amount;
-  }
-
-  function registerDiscount(address discount) onlyOwner {
-    discounts[discount] = true;
-
-    DiscountAdded(discount);
-  }
-
-  function unregisterDiscount(address discount) onlyOwner {
-    discounts[discount] = false;
-
-    DiscountRemoved(discount);
-  }
-
-  function kill() onlyOwner {
-    selfdestruct(owner);
-  }
-
-  function applyDiscount(
-    address discountAddress,
-    uint total,
-    address[] to,
-    uint[] amount
-  )
-    internal returns (uint) {
-    if (!discounts[discount]) {
-      return total;
-    }
-    Discount discount = Discount(discountAddress);
-    return discount.apply(total, to, amount);
   }
 }
