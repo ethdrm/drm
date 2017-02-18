@@ -1,11 +1,11 @@
-pragma solidity ^0.4.9;
+pragma solidity ^0.4.8;
 
 contract LicenceContainer {
 
   mapping(address => uint) private licences;
 
   function add(address to, uint amount) returns (bool) {
-    if (licences[to] + amount < licences[to]) {
+    if ((licences[to] + amount) < licences[to]) {
       return false;
     }
     licences[to] += amount;
@@ -17,6 +17,7 @@ contract LicenceContainer {
       return false;
     }
     licences[from] -= amount;
+		return true;
   }
 
   function transfer(address from, address to, uint amount) returns (bool) {

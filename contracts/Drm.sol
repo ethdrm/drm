@@ -1,9 +1,9 @@
-pragma solidity ^0.4.5;
+pragma solidity ^0.4.8;
 
-import "Discount.sol";
-import "DiscountRegistry.sol";
-import "LicenceContainer.sol";
-import "Mortal.sol";
+import "./Discount.sol";
+import "./DiscountRegistry.sol";
+import "./LicenceContainer.sol";
+import "./Mortal.sol";
 
 
 contract Drm is Mortal {
@@ -13,7 +13,7 @@ contract Drm is Mortal {
   LicenceContainer licenceContainer;
   DiscountRegistry discountRegistry;
   uint public price;
-  uint transferFee;
+  uint public transferFee;
 
   event LicenceBought(address[] to, uint[] amount);
   event LicenceTransfered(address from, address to, uint amount);
@@ -25,9 +25,11 @@ contract Drm is Mortal {
   event CustomerBanned(address customer, string reason);
 
   event PriceChanged(uint oldPrice, uint newPrice);
-  event TransferFeeChanged(uint oldPrice, uint newPrice);
+  event TransferFeeChanged(uint oldFee, uint newFee);
 
   event DepositeReceived(address sender, uint amount);
+
+	event HasLicence(address customer, uint amount, bool status);
 
   modifier onlyOwner() {
     if (msg.sender != owner) throw;
@@ -42,6 +44,8 @@ contract Drm is Mortal {
   function Drm(uint startPrice, uint startTransferFee) {
     price = startPrice;
     transferFee = startTransferFee;
+		licenceContainer = new LicenceContainer();
+		discountRegistry = new DiscountRegistry();
   }
 
   function() payable {
@@ -51,9 +55,9 @@ contract Drm is Mortal {
   function buy(
     address[] to,
     uint[] amount,
-    address[] discounts
+		address[] discounts
   ) payable {
-    if (to.length != amount.length) throw;
+		if (to.length != amount.length) throw;
 
     uint total = 0;
     for (uint i = 0; i < amount.length; i++) {
@@ -77,20 +81,19 @@ contract Drm is Mortal {
   }
 
   function transfer(
-    address from,
     address to,
     uint amount
-  ) costs(transferFee) {
+  ) payable costs(transferFee * amount) {
     if (blacklist[to]) throw;
-    if (!licenceContainer.transfer(from, to, amount)) throw;
+    if (!licenceContainer.transfer(msg.sender, to, amount)) throw;
 
-    LicenceTransfered(from, to, amount);
+    LicenceTransfered(msg.sender, to, amount);
   }
 
   function revoke(
     address from,
     uint amount,
-    string reason
+		string reason
   ) onlyOwner {
     if (!licenceContainer.revoke(from, amount)) throw;
 
@@ -98,7 +101,9 @@ contract Drm is Mortal {
   }
 
   function check(address customer, uint amount) returns (bool) {
-    return licenceContainer.owns(customer, amount);
+		bool status = licenceContainer.owns(customer, amount);
+		
+		HasLicence(customer, amount, status);
   }
 
   function ban(address customer, string reason) onlyOwner {
