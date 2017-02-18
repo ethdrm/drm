@@ -3,6 +3,6 @@ Ethereum drm contract
 
 ## TODO  
 * flexible ownership system
-* unit tests
+* docker container
 * stress tests
 * migration support

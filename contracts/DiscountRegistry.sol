@@ -1,6 +1,6 @@
-pragma solidity ^0.4.9;
+pragma solidity ^0.4.8;
 
-import "Discount.sol";
+import "./Discount.sol";
 
 contract DiscountRegistry {
 
@@ -10,11 +10,11 @@ contract DiscountRegistry {
     discounts[discount] = true;
   }
 
-  function unregister(address discount) {
+  function deregister(address discount) {
     discounts[discount] = false;
   }
 
-  function get(address discountAddr) returns (Discount discount, bool error) {
+  function get(address discountAddr) returns (Discount, bool) {
     if (!discounts[discountAddr]) {
       return (Discount(0x0), true);
     }
