@@ -8,7 +8,7 @@ contract('Drm', function(accounts) {
 
 		var deployedPrice;
 		var deployedFee;
-		
+
 		return Drm.new(price, fee).then(function(instance) {
 			drm = instance;
 			return drm.price();
@@ -185,6 +185,36 @@ contract('Drm', function(accounts) {
 			assert.equal(txInfo.logs[0].event, 'TransferFeeChanged', "Event wasn't fired");
 			assert.equal(txInfo.logs[0].args.oldFee, fee, "Old fee is invalid");
 			assert.equal(txInfo.logs[0].args.newFee, newFee, "New fee is invalid");
+		});
+	});
+
+	it("should register discount", function() {
+		var price = 100;
+		var fee = 30;
+		var owner = accounts[1];
+
+		var discount = 0x0;
+		var description = "test discount";
+
+		return Drm.new(price, fee, {from: owner}).then(function(instance) {
+			return instance.registerDiscount(discount, description, {from: owner});
+		}).then(function(txInfo) {
+				assert.equal(txInfo.logs[0].event, 'DiscountAdded', "Event wasn't fired");
+				assert.equal(txInfo.logs[0].args.description, description, "Description is invalid");
+		});
+	});
+
+	it("should deregister discount", function() {
+		var price = 100;
+		var fee = 30;
+		var owner = accounts[1];
+
+		var discount = 0x0;
+
+		return Drm.new(price, fee, {from: owner}).then(function(instance) {
+			return instance.deregisterDiscount(discount, {from: owner});
+		}).then(function(txInfo) {
+			assert.equal(txInfo.logs[0].event, 'DiscountRemoved', "Event wasn't fired");
 		});
 	});
 });
