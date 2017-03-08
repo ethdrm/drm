@@ -10,8 +10,8 @@ contract Drm is Mortal {
 
   mapping(address => bool) public blacklist;
 
-  LicenceContainer licenceContainer;
-  DiscountRegistry discountRegistry;
+  LicenceContainer private licenceContainer;
+   DiscountRegistry private discountRegistry;
   uint public price;
   uint public transferFee;
 
@@ -19,7 +19,7 @@ contract Drm is Mortal {
   event LicenceTransfered(address from, address to, uint amount);
   event LicenceRevoked(address customer, uint amount, string reason);
 
-  event DiscountAdded(address discount);
+  event DiscountAdded(address discount, string description);
   event DiscountRemoved(address discount);
 
   event CustomerBanned(address customer, string reason);
@@ -48,8 +48,7 @@ contract Drm is Mortal {
 		discountRegistry = new DiscountRegistry();
   }
 
-  function() payable {
-    DepositeReceived(msg.sender, msg.value);
+  function() {
   }
 
   function buy(
@@ -102,7 +101,7 @@ contract Drm is Mortal {
 
   function check(address customer, uint amount) returns (bool) {
 		bool status = licenceContainer.owns(customer, amount);
-		
+
 		HasLicence(customer, amount, status);
   }
 
@@ -124,5 +123,17 @@ contract Drm is Mortal {
     transferFee = newTransferFee;
 
     TransferFeeChanged(oldTransferFee, newTransferFee);
+  }
+
+  function registerDiscount(address discount, string description) onlyOwner {
+    discountRegistry.register(discount);
+
+    DiscountAdded(discount, description);
+  }
+
+  function deregisterDiscount(address discount) onlyOwner {
+    discountRegistry.deregister(discount);
+
+    DiscountRemoved(discount);
   }
 }
