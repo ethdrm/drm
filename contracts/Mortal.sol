@@ -1,16 +1,9 @@
 pragma solidity ^0.4.8;
 
-contract Mortal {
-  
-  address internal owner;
+import "./Owned.sol";
 
-  function kill() {
-    if (msg.sender == owner) {
+contract Mortal is Owned {
+  function kill() onlyOwner {
       selfdestruct(owner);
-    }
-  }
-
-  function Mortal() {
-    owner = msg.sender;
   }
 }
