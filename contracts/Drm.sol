@@ -2,138 +2,160 @@ pragma solidity ^0.4.8;
 
 import "./Discount.sol";
 import "./DiscountRegistry.sol";
-import "./LicenceContainer.sol";
+import "./LicenseDomain.sol";
 import "./Mortal.sol";
 
 
 contract Drm is Mortal {
 
   mapping(address => bool) public blacklist;
+  mapping(address => LicenseDomain) public domains;
+  mapping(address => LicenseDomain) public licenses;
 
-  LicenceContainer private licenceContainer;
-   DiscountRegistry private discountRegistry;
+  DiscountRegistry public discountRegistry = new DiscountRegistry();
+
   uint public price;
   uint public transferFee;
 
-  event LicenceBought(address[] to, uint[] amount);
-  event LicenceTransfered(address from, address to, uint amount);
-  event LicenceRevoked(address customer, uint amount, string reason);
+  event LicensePurchase(address client, LicenseDomain domain);
+  event LicenseTransfer(address from, address to, LicenseDomain toDomain, uint amount);
+  event LicenseRevoke(address from, LicenseDomain domain);
 
-  event DiscountAdded(address discount, string description);
-  event DiscountRemoved(address discount);
+  event ClientBan(address client);
+  event ClientUnban(address client);
 
-  event CustomerBanned(address customer, string reason);
+  event PriceChange(uint oldPrice, uint newPrice);
+  event TransferFeeChange(uint oldFee, uint newFee);
 
-  event PriceChanged(uint oldPrice, uint newPrice);
-  event TransferFeeChanged(uint oldFee, uint newFee);
-
-  event DepositeReceived(address sender, uint amount);
-
-	event HasLicence(address customer, uint amount, bool status);
-
-  modifier onlyOwner() {
-    if (msg.sender != owner) throw;
+  modifier notBanned(address client) {
+    if (blacklist[client]) throw;
     _;
   }
 
-  modifier costs(uint cost) {
-    if (msg.value < cost) throw;
+  modifier onlyDomainManager(LicenseDomain domain) {
+    if (domains[tx.origin] != domain) throw;
     _;
   }
 
-  function Drm(uint startPrice, uint startTransferFee) {
-    price = startPrice;
-    transferFee = startTransferFee;
-		licenceContainer = new LicenceContainer();
-		discountRegistry = new DiscountRegistry();
+  function Drm(uint _price, uint _transferFee) {
+    price = _price;
+    transferFee = _transferFee;
   }
 
-  function() {
-  }
+  function() {}
 
-  function buy(
-    address[] to,
-    uint[] amount,
-		address[] discounts
-  ) payable {
-		if (to.length != amount.length) throw;
-
-    uint total = 0;
-    for (uint i = 0; i < amount.length; i++) {
-      if (blacklist[to[i]]) throw;
-      total += amount[i] * price;
-    }
-
-    for (i = 0; i < discounts.length; i++) {
+  function applyDiscounts(uint total, uint amount, Discount.ClientAction action, address[] discounts)
+      private constant returns (uint) {
+    for (uint i = 0; i < discounts.length; i++) {
       var (discount, error) = discountRegistry.get(discounts[i]);
       if (!error) {
-        total = discount.apply(total, to, amount);
+        total = discount.apply(total, amount, action);
       }
     }
+
+    return total;
+  }
+
+  function purchase(address[] clients, address[] discounts) payable notBanned(tx.origin) {
+    uint total = applyDiscounts(clients.length * price, clients.length, Discount.ClientAction.PURCHASE, discounts);
     if (msg.value < total) throw;
 
-    for (i = 0; i < to.length; i++) {
-      if (!licenceContainer.add(to[i], amount[i])) throw;
+    LicenseDomain domain = domains[tx.origin];
+    // TODO: mb move to map as discounts?
+    bool hadDomain = domain != LicenseDomain(0x0);
+    if (!hadDomain) {
+      domain = new LicenseDomain(clients, tx.origin);
     }
 
-    LicenceBought(to, amount);
+    for (uint i = 0; i < clients.length; i++) {
+      if (blacklist[clients[i]] || licenses[clients[i]] != LicenseDomain(0x0)) throw;
+      if (hadDomain) {
+        domain.add(clients[i]);
+      }
+      licenses[clients[i]] = domain;
+    }
+
+    if (!hadDomain) {
+      domains[tx.origin] = domain;
+    }
+
+    LicensePurchase(tx.origin, domain);
   }
 
-  function transfer(
-    address to,
-    uint amount
-  ) payable costs(transferFee * amount) {
-    if (blacklist[to]) throw;
-    if (!licenceContainer.transfer(msg.sender, to, amount)) throw;
+  function transfer(address[] from, address[] to, address manager, address[] discounts)
+      payable notBanned(tx.origin) notBanned(manager) {
+    if (from.length != to.length) throw;
+    
+    uint total = applyDiscounts(transferFee * from.length, from.length, Discount.ClientAction.TRANSFER, discounts);
+    if (msg.value < total) throw;
 
-    LicenceTransfered(msg.sender, to, amount);
+    // TODO: add domain as discount param  
+    LicenseDomain domain = domains[manager];
+    bool hadDomain = domain != LicenseDomain(0x0);
+    if (!hadDomain) {
+      domain = new LicenseDomain(to, manager);
+    }
+    
+    for (uint i = 0; i < to.length; i++) {
+      if (blacklist[from[i]] || licenses[from[i]].manager() != tx.origin) throw;
+      if (blacklist[to[i]] || licenses[to[i]] != LicenseDomain(0x0)) throw;
+      licenses[from[i]].remove(from[i]);
+      licenses[from[i]] = LicenseDomain(0x0);
+      if (hadDomain) {
+        domain.add(to[i]);
+      }
+      licenses[to[i]] = domain;
+    }
+
+    if (!hadDomain) {
+      domains[manager] = domain;
+    }
+
+    LicenseTransfer(tx.origin, manager, domain, from.length);
   }
 
-  function revoke(
-    address from,
-    uint amount,
-		string reason
-  ) onlyOwner {
-    if (!licenceContainer.revoke(from, amount)) throw;
+  function revoke(address client) onlyOwner {
+    LicenseDomain domain = domains[client];
+    bool isDomainManager = domain != LicenseDomain(0x0);
+    if (isDomainManager) {
+      // TODO: somehow store extracted clients
+      for (uint i = 0; i < domain.size(); i++) {
+        licenses[domain.clients(i)] = LicenseDomain(0x0);
+      }
+      domain.kill();
+      domains[client] = LicenseDomain(0x0);
+    } else {
+      // TODO: will it fail on 0x0?
+      licenses[client].remove(client);
+      licenses[client] = LicenseDomain(0x0);
+    }
 
-    LicenceRevoked(from, amount, reason);
+    LicenseRevoke(client, domain);
   }
 
-  function check(address customer, uint amount) returns (bool) {
-		bool status = licenceContainer.owns(customer, amount);
+  function ban(address client) onlyOwner {
+    blacklist[client] = true;
 
-		HasLicence(customer, amount, status);
+    ClientBan(client);
   }
 
-  function ban(address customer, string reason) onlyOwner {
-    blacklist[customer] = true;
-
-    CustomerBanned(customer, reason);
+  function unban(address client) onlyOwner {
+    blacklist[client] = false;
+    
+    ClientUnban(client);
   }
 
   function changePrice(uint newPrice) onlyOwner {
     uint oldPrice = price;
     price = newPrice;
 
-    PriceChanged(oldPrice, newPrice);
+    PriceChange(oldPrice, newPrice);
   }
 
   function changeTransferFee(uint newTransferFee) onlyOwner {
     uint oldTransferFee = transferFee;
     transferFee = newTransferFee;
 
-    TransferFeeChanged(oldTransferFee, newTransferFee);
-  }
-
-  function registerDiscount(address discount, string description) onlyOwner {
-    discountRegistry.register(discount);
-
-    DiscountAdded(discount, description);
-  }
-
-  function deregisterDiscount(address discount) onlyOwner {
-    discountRegistry.deregister(discount);
-
-    DiscountRemoved(discount);
+    TransferFeeChange(oldTransferFee, newTransferFee);
   }
 }

@@ -1,16 +1,17 @@
 pragma solidity ^0.4.8;
 
 import "./Discount.sol";
+import "./Mortal.sol";
 
-contract DiscountRegistry {
+contract DiscountRegistry is Mortal {
 
   mapping(address => bool) private discounts;
 
-  function register(address discount) {
+  function register(address discount) onlyOwner {
     discounts[discount] = true;
   }
 
-  function deregister(address discount) {
+  function deregister(address discount) onlyOwner {
     discounts[discount] = false;
   }
 
