@@ -5,11 +5,11 @@ contract Owned {
     address internal owner;
 
     function Owned() {
-        owner = tx.origin;
+        owner = msg.sender;
     }
 
     modifier onlyOwner {
-        if (tx.origin != owner) throw;
+        if (msg.sender != owner) throw;
         _;
     }
 

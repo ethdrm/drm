@@ -20,23 +20,16 @@ contract LicenseDomain is Mortal {
     function remove(address client) onlyOwner {
         for (uint i = 0; i < clients.length; i++) {
             if (clients[i] == client) {
-                delete clients[i];
-                // TODO: shift array
-                return;
+                clients[i] = clients[clients.length - 1];
+                clients.length -= 1;
+                break;
             }
         }
+
+        if (clients.length == 0) kill();
     }
 
-    // function transfer(address from, address to) onlyOwner {
-    //     for (uint i = 0; i < clients.length; i++) {
-    //         if (clients[i] == from) {
-    //             clients[i] = to;
-    //             break;
-    //         }
-    //     }
-    // }
-
-    function size() returns (uint) {
+    function clientsAmount() returns (uint) {
         return clients.length;
     }
 
