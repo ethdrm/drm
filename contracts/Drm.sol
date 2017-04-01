@@ -61,7 +61,6 @@ contract Drm is Mortal {
     if (msg.value < total) throw;
 
     LicenseDomain domain = domains[tx.origin];
-    // TODO: mb move to map as discounts?
     bool hadDomain = domain != LicenseDomain(0x0);
     if (!hadDomain) {
       domain = new LicenseDomain(clients, tx.origin);
@@ -88,8 +87,7 @@ contract Drm is Mortal {
     
     uint total = applyDiscounts(transferFee * from.length, from.length, Discount.ClientAction.TRANSFER, discounts);
     if (msg.value < total) throw;
-
-    // TODO: add domain as discount param  
+ 
     LicenseDomain domain = domains[manager];
     bool hadDomain = domain != LicenseDomain(0x0);
     if (!hadDomain) {
@@ -118,14 +116,12 @@ contract Drm is Mortal {
     LicenseDomain domain = domains[client];
     bool isDomainManager = domain != LicenseDomain(0x0);
     if (isDomainManager) {
-      // TODO: somehow store extracted clients
-      for (uint i = 0; i < domain.size(); i++) {
+      for (uint i = 0; i < domain.clientsAmount(); i++) {
         licenses[domain.clients(i)] = LicenseDomain(0x0);
       }
       domain.kill();
       domains[client] = LicenseDomain(0x0);
     } else {
-      // TODO: will it fail on 0x0?
       licenses[client].remove(client);
       licenses[client] = LicenseDomain(0x0);
     }
