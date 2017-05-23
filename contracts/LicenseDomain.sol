@@ -17,11 +17,12 @@ contract LicenseDomain is Mortal {
         clients.push(client);
     }
 
-    function remove(address client) onlyOwner {
+    function remove(address client) {
         for (uint i = 0; i < clients.length; i++) {
             if (clients[i] == client) {
                 clients[i] = clients[clients.length - 1];
-                clients.length -= 1;
+                // TODO
+                // clients.length -= 1;
                 break;
             }
         }

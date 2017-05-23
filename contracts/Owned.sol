@@ -5,15 +5,17 @@ contract Owned {
     address internal owner;
 
     function Owned() {
-        owner = msg.sender;
+        // owner is not initiated in constrcted due to usage of proxy
+    }
+
+    function setOwner(address _owner) {
+        if (owner == 0x0 || msg.sender == owner) {
+            owner = _owner;
+        }
     }
 
     modifier onlyOwner {
         if (msg.sender != owner) throw;
         _;
-    }
-
-    function transferOwnership(address newOwner) onlyOwner {
-        owner = newOwner;
     }
 }
