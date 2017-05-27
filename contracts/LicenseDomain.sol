@@ -21,8 +21,8 @@ contract LicenseDomain is Mortal {
         for (uint i = 0; i < clients.length; i++) {
             if (clients[i] == client) {
                 clients[i] = clients[clients.length - 1];
-                // TODO
-                // clients.length -= 1;
+                delete clients[clients.length - 1];
+                clients.length--;
                 break;
             }
         }

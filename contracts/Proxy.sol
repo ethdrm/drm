@@ -8,6 +8,8 @@ contract Proxy {
         // warning: should change this value during deployment
         ProxyStorage proxyStorage = ProxyStorage(0x1111222233334444555566667777888899990000);
         uint32 len = proxyStorage.sizes(msg.sig);
+        // warning: should change this value during deployment
+        if (msg.sig == bytes4(sha3("init(address)")) && msg.sender != 0x1111222233334444555566667777888899990001) throw;
         address target = proxyStorage.target();
         
         assembly {

@@ -10,22 +10,22 @@ contract Drm is Mortal {
     uint public price;
     uint public transferFee;
 
-    DiscountRegistry public discountRegistry = new DiscountRegistry();    
-    
+    DiscountRegistry public discountRegistry;    
+
     mapping(address => bool) public blacklist;
     mapping(address => LicenseDomain) public domains;
     mapping(address => LicenseDomain) public licenses;
-    
+
     event LicensePurchase(address client, address domain);
     event LicenseTransfer(address from, address to, address toDomain, uint amount);
     event LicenseRevoke(address from, address domain);
-    
+
     event ClientBan(address client);
     event ClientUnban(address client);
-    
+
     event PriceChange(uint oldPrice, uint newPrice);
     event TransferFeeChange(uint oldFee, uint newFee);
-    
+
     modifier notBanned(address client) {
         if (blacklist[client]) throw;
         _;
@@ -41,6 +41,11 @@ contract Drm is Mortal {
         // in proxy (cause it executes delegatecall and we're using proxy context)
     }
 
+    function init(address _owner) {
+        super.setOwner(_owner);
+        discountRegistry = new DiscountRegistry();
+    }
+
     function setPrice(uint _price) onlyOwner {
         price = _price;
     }
@@ -48,7 +53,7 @@ contract Drm is Mortal {
     function setTransferFee(uint _transferFee) onlyOwner {
         transferFee = _transferFee;
     }
-    
+
     function purchase(address[] clients, address[] discounts) payable notBanned(tx.origin) {
         uint total = applyDiscounts(clients.length * price, clients.length, Discount.ClientAction.PURCHASE, discounts);
         if (msg.value < total) throw;
@@ -127,7 +132,7 @@ contract Drm is Mortal {
         
         ClientBan(client);
     }
-    
+
     function unban(address client) onlyOwner {
         blacklist[client] = false;
         

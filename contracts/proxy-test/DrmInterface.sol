@@ -6,4 +6,5 @@ contract DrmInterface {
     function licenses(address client) returns(address);
     function purchase(address[] clients, address[] discounts) payable;
     function transfer(address[] from, address[] to, address manager, address[] discounts) payable;
+    function discountRegistry() returns(address);
 }

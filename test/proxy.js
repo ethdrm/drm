@@ -20,6 +20,9 @@ contract('Proxy', function(accounts) {
             return caller.transferFee.call();
         }).then(function(actual) {
             assert.equal(actual.toNumber(), transferFee);
+            return caller.discountRegistry.call();
+        }).then(function(registry) {
+            assert.notEqual(registry, 0x0);
         });
     });
 
@@ -30,7 +33,6 @@ contract('Proxy', function(accounts) {
         }).then(function() {
             return caller.licenses.call(client);
         }).then(function(actual) {
-            console.log(actual);
             assert.notEqual(actual, 0x0);
         });
     });
@@ -51,7 +53,7 @@ contract('Proxy', function(accounts) {
             return caller.licenses.call(other);
         }).then(function(actual) {
             assert.notEqual(actual, 0x0);
-        })
+        });
     });
 });
 
@@ -71,14 +73,19 @@ function init(price, transferFee) {
         funcs = drm.abi.filter(obj => obj.type === 'function');
         funcs.map(fn => proxyStorage.registerSize(web3.sha3(signature(fn)), size(fn))).reduce((prev, cur) => prev.then(cur), Promise.resolve());
     }).then(function() {
+        return DrmManagement.new(proxyStorage.address);
+    }).then(function(instance) {
+        management = instance;
+        return proxyStorage.setOwner(management.address);
+    }).then(function() {
         Proxy.unlinked_binary = Proxy.unlinked_binary.replace('1111222233334444555566667777888899990000', proxyStorage.address.slice(2));
+        Proxy.unlinked_binary = Proxy.unlinked_binary.replace('1111222233334444555566667777888899990001', management.address.slice(2));
         return Proxy.new();
     }).then(function(instance) {
         proxy = instance;
         Proxy.unlinked_binary = Proxy.unlinked_binary.replace(proxyStorage.address.slice(2), '1111222233334444555566667777888899990000');
-        return DrmManagement.new(proxyStorage.address);
-    }).then(function(instance){
-        return instance.deployDrm(drm.address, proxy.address, price, transferFee);
+        Proxy.unlinked_binary = Proxy.unlinked_binary.replace(management.address.slice(2), '1111222233334444555566667777888899990001');
+        return management.deployDrm(drm.address, proxy.address, price, transferFee);
     }).then(function() {
         return DrmCaller.new(proxy.address);
     });

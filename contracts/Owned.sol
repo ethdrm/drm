@@ -1,11 +1,10 @@
 pragma solidity ^0.4.8;
 
 contract Owned {
-
     address internal owner;
 
     function Owned() {
-        // owner is not initiated in constrcted due to usage of proxy
+        owner = msg.sender;
     }
 
     function setOwner(address _owner) {

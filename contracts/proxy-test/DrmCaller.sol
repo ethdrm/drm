@@ -9,8 +9,6 @@ contract DrmCaller {
     address[] to;
     address[] discounts;
 
-    event NumberExtracted(uint number);
-
     function DrmCaller(DrmInterface _target) {
         target = _target;
     }
@@ -36,5 +34,9 @@ contract DrmCaller {
 
     function licenses(address client) returns(address) {
         return target.licenses(client);
+    }
+
+    function discountRegistry() returns(address) {
+        return target.discountRegistry();
     }
 }

@@ -1,6 +1,8 @@
 pragma solidity ^0.4.8;
 
-contract ProxyStorage {
+import './Mortal.sol';
+
+contract ProxyStorage is Mortal {
     mapping(bytes4=>uint32) public sizes;
     address public target;
 
