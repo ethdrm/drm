@@ -1,15 +1,15 @@
 var Drm = artifacts.require("./Drm.sol");
 
 contract('Drm', function(accounts) {
+    var drm;
+    var price = 100;
+    var fee = 30;
+    
 	it("should set price and transfer fee", function() {
-		var drm;
-		var price = 100;
-		var fee = 30;
-
 		var deployedPrice;
 		var deployedFee;
-		
-		return Drm.new(price, fee).then(function(instance) {
+
+		return init(accounts[0], price, fee).then(function(instance) {
 			drm = instance;
 			return drm.price();
 		}).then(function(p) {
@@ -23,168 +23,201 @@ contract('Drm', function(accounts) {
 		});
 	});
 
-	it("should register a licence", function() {
-		var drm;
+    it("should register license", function() {
+        var client = accounts[4];
+        var manager = accounts[0];
 
-		var amount = 42;
-		var price = 100;
-		var fee = 30;
+        return init(accounts[0], price, fee).then(function(drm) {
+            return drm.purchase([client], [], {from: manager, value: price})
+        }).then(function(txInfo) {
+            assert.equal(txInfo.logs[0].event, 'LicensePurchase', "Event wasn't fired");
+            assert.equal(txInfo.logs[0].args.client, manager, "Event was fired for the wrong client");
+        });
+    });
 
-		return Drm.new(price, fee).then(function(instance) {
+    it("should reister license in existing domain", function() {
+        var domain;
+        var client = accounts[0];
+        var addedAccount = accounts[1];
+
+        return init(accounts[0], price, fee).then(function(instance) {
 			drm = instance;
-		}).then(function() {
-			return drm.buy([accounts[0],], [amount,], [], {from: accounts[0], value: price * amount});
+            return drm.purchase([client], [], {from: client, value: price});
+        }).then(function(txInfo) {
+            assert.equal(txInfo.logs[0].event, 'LicensePurchase', "Initial purchase failed");
+            domain = txInfo.logs[0].args.domain;
+        }).then(function() {
+            return drm.purchase([addedAccount], [], {from: client, value: price});
+        }).then(function(txInfo) {
+            assert.equal(txInfo.logs[0].event, 'LicensePurchase', "Additional purchase failed");
+            assert.equal(txInfo.logs[0].args.domain, domain, "Additional purchase was registered for the wrong domain");
+        });
+    });
+
+    it("should register multiple clients", function() {
+        var clients = accounts;
+        var manager = clients[0];
+
+        return init(accounts[0], price, fee).then(function(instance) {
+			drm = instance;
+            return drm.purchase(clients, [], {from: manager, value: price * accounts.length});
+        }).then(function(txInfo) {
+            assert.equal(txInfo.logs[0].event, 'LicensePurchase', "Event for multiple clients wasn't fired");
+            assert.equal(txInfo.logs[0].args.client, manager);
+        });
+    });
+
+    it ("should revoke license from regular client", function() {
+        var client = accounts[3];
+        var manager = accounts[0];
+        var drmOwner = accounts[accounts.length - 1];
+
+        return init(drmOwner, price, fee).then(function(instance) {
+			drm = instance;
+            return drm.purchase([client], [], {from: manager, value: price});
+        }).then(function(txInfo) {
+            assert.equal(txInfo.logs[0].event, 'LicensePurchase', "Purchase event wasn't fired");
+            assert.equal(txInfo.logs[0].args.client, manager, "Domain was registered for the wrong address");
+        }).then(function() {
+            return drm.revoke(client, {from: drmOwner});
+        }).then(function(txInfo) {
+            assert.equal(txInfo.logs[0].event, 'LicenseRevoke', "License revoke event wasn't fired");
+            assert.equal(txInfo.logs[0].args.from, client, "License was revoked from the wrong client");
+        });
+    });
+
+	it ("should revoke all licenses in domain", function() {
+		var client = accounts[0];
+		var manager = accounts[1];
+		var clients = [client, manager];
+		var drmOwner = accounts[2];
+
+		return init(drmOwner, price, fee).then(function(instance) {
+			drm = instance;
+			return drm.purchase(clients, [], {from: manager, value: clients.length * price});
 		}).then(function(txInfo) {
-			assert.equal(txInfo.logs[0].event, 'LicenceBought', "Event wasn't fired");
-			assert.equal(txInfo.logs[0].args.to[0], accounts[0], "Licence holder is invalid");
-			assert.equal(txInfo.logs[0].args.amount[0], amount, "Licence amount is invalid");
+			assert.equal(txInfo.logs[0].event, 'LicensePurchase', "License purchase event wasn't fired");
+		}).then(function() {
+			return drm.revoke(manager, {from: drmOwner});
+		}).then(function(txInfo) {
+			assert.equal(txInfo.logs[0].event, 'LicenseRevoke', "Domain licenses weren't revoked");
 		});
 	});
 
-	it("should revoke licence", function() {
-		// TODO: move to before test
-		var drm;
-
-		var amount = 42;
-		var price = 100;
-		var fee = 30;
-		var reason = 'no reason';
-
-		return Drm.new(price, fee, {from: accounts[1]}).then(function(instance) {
-			drm = instance;
-		}).then(function() {
-			drm.buy([accounts[0],], [amount,], [], {from: accounts[0], value: price * amount});
-		}).then(function() {
-			return drm.revoke(accounts[0], amount, reason, {from: accounts[1]});
-		}).then(function(txInfo) {
-			assert.equal(txInfo.logs[0].event, 'LicenceRevoked', "Event wasn't fired");
-			assert.equal(txInfo.logs[0].args.customer, accounts[0], "Revoked from the wrong holder");
-			assert.equal(txInfo.logs[0].args.amount, amount, "Revoked wrong amount");
-			assert.equal(txInfo.logs[0].args.reason, reason, "Different revoke reason")
-		});
-	});
-
-	it("should transfer licence", function() {
-		var drm;
-
-		var price = 100;
-		var transferFee = 30;
-
+	it("should transfer license", function() {
 		var from = accounts[0];
 		var to = accounts[1];
-		var transferAmount = 42;
+		var manager = accounts[2];
+		var toManager = accounts[3];
+		var drmOwner = accounts[4];
 
-		var fromStartAmount = 1437;
-		var toStartAmount = 1337;
-
-		return Drm.new(price, transferFee).then(function(instance) {
+		return init(drmOwner, price, fee).then(function(instance) {
 			drm = instance;
-		}).then(function() {
-			var customers = [from, to];
-			var amount = [fromStartAmount, toStartAmount];
-			var discounts = []
-			drm.buy(customers, amount, discounts, {from: accounts[2], value: price * (fromStartAmount + toStartAmount)});
-		}).then(function() {
-			return drm.transfer(to, transferAmount, {from: from, value: transferAmount * transferFee});
+			return drm.purchase([from], [], {from: manager, value: price});	
 		}).then(function(txInfo) {
-			assert.equal(txInfo.logs[0].event, 'LicenceTransfered', "Event wasn't fired");
-			assert.equal(txInfo.logs[0].args.from, from, 'Licence transfer from wrong account');
-			assert.equal(txInfo.logs[0].args.to, to, 'Licence transfered to wrong account');
-			assert.equal(txInfo.logs[0].args.amount, transferAmount, 'Transfered wrong amount');
+			assert.equal(txInfo.logs[0].event, 'LicensePurchase', "License purchase event wasn't fired");
+		}).then(function() {
+			return drm.transfer([from], [to], toManager, [], {from: manager, value: fee});
+		}).then(function(txInfo) {
+			assert.equal(txInfo.logs[0].event, 'LicenseTransfer', "License transfer event wasn't fired");
+			assert.equal(txInfo.logs[0].args.from, manager, "License transfer from is invalid");
+			assert.equal(txInfo.logs[0].args.to, toManager, "License transfer to is invalid");
 		});
 	});
 
-	it("should check for licence", function() {
-		var drm;
+	it("should transfer license to existing domain", function() {
+		var fromManager = accounts[0];
+		var toManager = accounts[1];
+		var to = accounts[2];
+		var drmOwner = accounts[3];
+		var toDomain;
 
-		var price = 100;
-		var fee = 30;
-
-		var customer = accounts[0];
-		var someAddr = accounts[1];
-		var amount = 1337;
-
-		return Drm.new(price, fee).then(function(instance) {
+		return init(drmOwner, price, fee).then(function(instance) {
 			drm = instance;
+			return drm.purchase([fromManager], [], {from: fromManager, value: price});
+		}).then(function(txInfo) {
+			assert.equal(txInfo.logs[0].event, 'LicensePurchase', "LicensePurchase event wasn't fired");
 		}).then(function() {
-			drm.buy([customer], [amount], [], {value: price * amount});
+			return drm.purchase([toManager], [], {from: toManager, value: price});
+		}).then(function(txInfo) {
+			assert.equal(txInfo.logs[0].event, 'LicensePurchase', "LicensePurchase event wasn't fired");
+			toDomain = txInfo.logs[0].args.domain;
 		}).then(function() {
-			return drm.check(customer, amount);
+			return drm.transfer([fromManager], [to], toManager, [], {from: fromManager, value: fee});
 		}).then(function(txInfo) {
-			assert.equal(txInfo.logs[0].event, 'HasLicence', "Event wasn't fired");
-			assert.equal(txInfo.logs[0].args.customer, customer, "Wrong customer check");
-			assert.equal(txInfo.logs[0].args.amount, amount, "Wrong amount check");
-			assert.equal(txInfo.logs[0].args.status, true, "Check status is invalid");
-
-			return drm.check(customer, amount + 1);
-		}).then(function(txInfo) {
-			assert.equal(txInfo.logs[0].event, 'HasLicence', "Event wasn't fired");
-			assert.equal(txInfo.logs[0].args.status, false, "Check status is invalid");
-
-			return drm.check(someAddr, 1);
-		}).then(function(txInfo) {
-			assert.equal(txInfo.logs[0].event, 'HasLicence', "Event wasn't fired");
-			assert.equal(txInfo.logs[0].args.status, false, "Check status is invalid");
+			assert.equal(txInfo.logs[0].event, 'LicenseTransfer', "LicenseTransfer event wasn't fired");
+			assert.equal(txInfo.logs[0].args.from, fromManager, "LicenseTransfer#from is invalid");
+			assert.equal(txInfo.logs[0].args.to, toManager, "LicenseTransfere#to is invalid");
+			assert.equal(txInfo.logs[0].args.toDomain, toDomain, "LicenseTransfer#domain is invalid");
 		});
 	});
 
-	it("should ban customer", function() {
-		var drm;
+	it("should ban client", function() {
+		var drmOwner = accounts[5];
+		var client = accounts[1];
 
-		var price = 100;
-		var fee = 30;
-
-		var customer = accounts[0];
-		var reason = 'no reason';
-
-		return Drm.new(price, fee).then(function(instance) {
+		return init(drmOwner, price, fee).then(function(instance) {
 			drm = instance;
-		}).then(function() {
-			return drm.ban(customer, reason);
+			return drm.ban(client, {from: drmOwner});
 		}).then(function(txInfo) {
-			assert.equal(txInfo.logs[0].event, 'CustomerBanned', "Event wasn't fired");
-			assert.equal(txInfo.logs[0].args.customer, customer, "Banned wrong customer");
-			assert.equal(txInfo.logs[0].args.reason, reason, "invalid reason specified");
+			assert.equal(txInfo.logs[0].event, 'ClientBan', "Client ban event wasn't fired");
+			assert.equal(txInfo.logs[0].args.client, client, "Banned wrong client");
+		});
+	});
+
+	it("should unban client", function() {
+		var drmOwner = accounts[4];
+		var client = accounts[0];
+
+		return init(drmOwner, price, fee).then(function(instance) {
+			drm = instance;
+			return drm.unban(client, {from: drmOwner});
+		}).then(function(txInfo) {
+			assert.equal(txInfo.logs[0].event, 'ClientUnban', "Client unban event wasn't fired");
+			assert.equal(txInfo.logs[0].args.client, client, "Unbanned wrong client");
 		});
 	});
 
 	it("should change price", function() {
-		var drm;
-
-		var price = 100;
-		var fee = 30;
-		var owner = accounts[1];
-
-		var newPrice = 1437;
-
-		return Drm.new(price, fee, {from: owner}).then(function(instance) {
+		var expected = 100500;
+		var drmOwner = accounts[accounts.length - 1];
+		
+		return init(drmOwner, price, fee).then(function(instance) {
 			drm = instance;
+			drm.setPrice(expected, {from: drmOwner});
 		}).then(function() {
-			return drm.changePrice(newPrice, {from: owner});
-		}).then(function(txInfo) {
-			assert.equal(txInfo.logs[0].event, 'PriceChanged', "Event wasn't fired");
-			assert.equal(txInfo.logs[0].args.oldPrice, price, "Old price is invalid");
-			assert.equal(txInfo.logs[0].args.newPrice, newPrice, "New price is invalid");
+			return drm.price();
+		}).then(function(actual) {
+			assert.equal(expected, actual, "Price wasn't set");
 		});
 	});
 
-	it("should change transfer fee", function() {
-		var drm;
-
-		var price = 100;
-		var fee = 30;
-		var owner = accounts[1];
-
-		var newFee = 42;
-
-		return Drm.new(price, fee, {from: owner}).then(function(instance) {
+	it("should change fee", function() {
+		var expected = 100500;
+		var drmOwner = accounts[accounts.length - 1];
+		
+		return init(drmOwner, price, fee).then(function(instance) {
 			drm = instance;
+			drm.setTransferFee(expected, {from: drmOwner});
 		}).then(function() {
-			return drm.changeTransferFee(newFee, {from: owner});
-		}).then(function(txInfo) {
-			assert.equal(txInfo.logs[0].event, 'TransferFeeChanged', "Event wasn't fired");
-			assert.equal(txInfo.logs[0].args.oldFee, fee, "Old fee is invalid");
-			assert.equal(txInfo.logs[0].args.newFee, newFee, "New fee is invalid");
+			return drm.transferFee();
+		}).then(function(actual) {
+			assert.equal(expected, actual, "Price wasn't set");
 		});
 	});
 });
+
+function init(owner, price, fee) {
+	var drm;
+
+	return Drm.new().then(function(instance) {
+		drm = instance;
+		return drm.init(owner);
+	}).then(function() {
+		return drm.setPrice(price, {from: owner});
+	}).then(function() {
+		return drm.setTransferFee(fee, {from: owner});
+	}).then(function() {
+		return drm;
+	});
+}

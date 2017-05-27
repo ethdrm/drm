@@ -1,7 +1,10 @@
 pragma solidity ^0.4.8;
 
 contract Discount {
+  
+  enum ClientAction { PURCHASE, TRANSFER }
+
   function register();
   function unregister();
-  function apply(uint total, address[] to, uint[] amount) returns (uint);
+  function apply(uint total, uint amount, ClientAction action) returns (uint);
 }
