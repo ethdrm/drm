@@ -9,7 +9,7 @@ contract('Drm', function(accounts) {
 		var deployedPrice;
 		var deployedFee;
 
-		return Drm.new(price, fee).then(function(instance) {
+		return init(accounts[0], price, fee).then(function(instance) {
 			drm = instance;
 			return drm.price();
 		}).then(function(p) {
@@ -27,9 +27,7 @@ contract('Drm', function(accounts) {
         var client = accounts[4];
         var manager = accounts[0];
 
-        return Drm.new(price, fee).then(function(instance) {
-            drm = instance;
-        }).then(function() {
+        return init(accounts[0], price, fee).then(function(drm) {
             return drm.purchase([client], [], {from: manager, value: price})
         }).then(function(txInfo) {
             assert.equal(txInfo.logs[0].event, 'LicensePurchase', "Event wasn't fired");
@@ -39,13 +37,11 @@ contract('Drm', function(accounts) {
 
     it("should reister license in existing domain", function() {
         var domain;
-
         var client = accounts[0];
         var addedAccount = accounts[1];
 
-        return Drm.new(price, fee).then(function(instance) {
-            drm = instance;
-        }).then(function() {
+        return init(accounts[0], price, fee).then(function(instance) {
+			drm = instance;
             return drm.purchase([client], [], {from: client, value: price});
         }).then(function(txInfo) {
             assert.equal(txInfo.logs[0].event, 'LicensePurchase', "Initial purchase failed");
@@ -62,9 +58,8 @@ contract('Drm', function(accounts) {
         var clients = accounts;
         var manager = clients[0];
 
-        return Drm.new(price, fee).then(function(instance) {
-            drm = instance;
-        }).then(function() {
+        return init(accounts[0], price, fee).then(function(instance) {
+			drm = instance;
             return drm.purchase(clients, [], {from: manager, value: price * accounts.length});
         }).then(function(txInfo) {
             assert.equal(txInfo.logs[0].event, 'LicensePurchase', "Event for multiple clients wasn't fired");
@@ -77,9 +72,8 @@ contract('Drm', function(accounts) {
         var manager = accounts[0];
         var drmOwner = accounts[accounts.length - 1];
 
-        return Drm.new(price, fee, {from: drmOwner}).then(function(instance) {
-            drm = instance;
-        }).then(function() {
+        return init(drmOwner, price, fee).then(function(instance) {
+			drm = instance;
             return drm.purchase([client], [], {from: manager, value: price});
         }).then(function(txInfo) {
             assert.equal(txInfo.logs[0].event, 'LicensePurchase', "Purchase event wasn't fired");
@@ -98,9 +92,8 @@ contract('Drm', function(accounts) {
 		var clients = [client, manager];
 		var drmOwner = accounts[2];
 
-		return Drm.new(price, fee, {from: drmOwner}).then(function(instance) {
+		return init(drmOwner, price, fee).then(function(instance) {
 			drm = instance;
-		}).then(function() {
 			return drm.purchase(clients, [], {from: manager, value: clients.length * price});
 		}).then(function(txInfo) {
 			assert.equal(txInfo.logs[0].event, 'LicensePurchase', "License purchase event wasn't fired");
@@ -118,9 +111,8 @@ contract('Drm', function(accounts) {
 		var toManager = accounts[3];
 		var drmOwner = accounts[4];
 
-		return Drm.new(price, fee, {from: drmOwner}).then(function(instance) {
+		return init(drmOwner, price, fee).then(function(instance) {
 			drm = instance;
-		}).then(function() {
 			return drm.purchase([from], [], {from: manager, value: price});	
 		}).then(function(txInfo) {
 			assert.equal(txInfo.logs[0].event, 'LicensePurchase', "License purchase event wasn't fired");
@@ -140,9 +132,8 @@ contract('Drm', function(accounts) {
 		var drmOwner = accounts[3];
 		var toDomain;
 
-		return Drm.new(price, fee, {from: drmOwner}).then(function(instance) {
+		return init(drmOwner, price, fee).then(function(instance) {
 			drm = instance;
-		}).then(function() {
 			return drm.purchase([fromManager], [], {from: fromManager, value: price});
 		}).then(function(txInfo) {
 			assert.equal(txInfo.logs[0].event, 'LicensePurchase', "LicensePurchase event wasn't fired");
@@ -165,9 +156,8 @@ contract('Drm', function(accounts) {
 		var drmOwner = accounts[5];
 		var client = accounts[1];
 
-		return Drm.new(price, fee, {from: drmOwner}).then(function(instance) {
+		return init(drmOwner, price, fee).then(function(instance) {
 			drm = instance;
-		}).then(function() {
 			return drm.ban(client, {from: drmOwner});
 		}).then(function(txInfo) {
 			assert.equal(txInfo.logs[0].event, 'ClientBan', "Client ban event wasn't fired");
@@ -179,9 +169,8 @@ contract('Drm', function(accounts) {
 		var drmOwner = accounts[4];
 		var client = accounts[0];
 
-		return Drm.new(price, fee, {from: drmOwner}).then(function(instance) {
+		return init(drmOwner, price, fee).then(function(instance) {
 			drm = instance;
-		}).then(function() {
 			return drm.unban(client, {from: drmOwner});
 		}).then(function(txInfo) {
 			assert.equal(txInfo.logs[0].event, 'ClientUnban', "Client unban event wasn't fired");
@@ -193,10 +182,9 @@ contract('Drm', function(accounts) {
 		var expected = 100500;
 		var drmOwner = accounts[accounts.length - 1];
 		
-		return Drm.new(price, fee, {from: drmOwner}).then(function(instance) {
+		return init(drmOwner, price, fee).then(function(instance) {
 			drm = instance;
-		}).then(function() {
-			drm.changePrice(expected, {from: drmOwner});
+			drm.setPrice(expected, {from: drmOwner});
 		}).then(function() {
 			return drm.price();
 		}).then(function(actual) {
@@ -208,10 +196,9 @@ contract('Drm', function(accounts) {
 		var expected = 100500;
 		var drmOwner = accounts[accounts.length - 1];
 		
-		return Drm.new(price, fee, {from: drmOwner}).then(function(instance) {
+		return init(drmOwner, price, fee).then(function(instance) {
 			drm = instance;
-		}).then(function() {
-			drm.changeTransferFee(expected, {from: drmOwner});
+			drm.setTransferFee(expected, {from: drmOwner});
 		}).then(function() {
 			return drm.transferFee();
 		}).then(function(actual) {
@@ -219,3 +206,18 @@ contract('Drm', function(accounts) {
 		});
 	});
 });
+
+function init(owner, price, fee) {
+	var drm;
+
+	return Drm.new().then(function(instance) {
+		drm = instance;
+		return drm.init(owner);
+	}).then(function() {
+		return drm.setPrice(price, {from: owner});
+	}).then(function() {
+		return drm.setTransferFee(fee, {from: owner});
+	}).then(function() {
+		return drm;
+	});
+}
